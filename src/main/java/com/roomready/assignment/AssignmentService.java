@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit;
 
 import org.springframework.stereotype.Service;
 
+import com.roomready.error.AlreadyAssigned;
 import com.roomready.error.NoSuchAssignment;
 import com.roomready.error.NoSuchHousekeeper;
 import com.roomready.error.StepSkipped;
@@ -14,6 +15,7 @@ import com.roomready.room.HousekeeperRepository;
 import com.roomready.room.PropertyRepository;
 import com.roomready.room.RoomService;
 import com.roomready.room.RoomState;
+import com.roomready.room.RoomView;
 import com.roomready.room.StayRepository;
 
 /**
@@ -32,7 +34,7 @@ public class AssignmentService {
 
     public AssignmentService(PropertyRepository properties, RoomService rooms, HousekeeperRepository housekeepers,
                              StayRepository stays, AssignmentRepository assignments, Clock clock) {
-              this.properties = properties;
+        this.properties = properties;
         this.rooms = rooms;
         this.housekeepers = housekeepers;
         this.stays = stays;
@@ -40,19 +42,25 @@ public class AssignmentService {
         this.clock = clock;
     }
 
-    /** The room must exist, then the housekeeper; only a dirty room can be assigned. */
+    /**
+     * The room must exist, then the housekeeper; a room somebody is already on is already-assigned, and
+     * otherwise only a dirty room can be assigned.
+     */
     public AssignResponse assign(String property, String room, String housekeeper) {
         long propertyId = propertyId(property);
-        RoomState state = rooms.room(property, room).state();
+        RoomView view = rooms.room(property, room);
         HousekeeperRepository.Row who = housekeepers.one(propertyId, housekeeper)
                 .orElseThrow(() -> new NoSuchHousekeeper(housekeeper));
-        need(room, state, RoomState.dirty);
+        if (view.assignedTo() != null) {
+            throw new AlreadyAssigned(room, view.assignedTo());
+        }
+        need(room, view.state(), RoomState.dirty);
         long stayId = stays.current(propertyId, room).orElseThrow().id();
         Instant now = now();
         long id = assignments.insert(propertyId, room, stayId, who.id(), now);
         return new AssignResponse(AssignmentIds.format(id), room, who.name(), now);
-    }  
-    
+    }
+
     public StartResponse start(String property, String assignmentId) {
         AssignmentRepository.Row a = assignment(property, assignmentId);
         need(a.room(), rooms.room(property, a.room()).state(), RoomState.assigned);
@@ -75,8 +83,8 @@ public class AssignmentService {
         if (state != needed) {
             throw new StepSkipped(room, state.name(), state.needs());
         }
-    }  
-    
+    }
+
     private AssignmentRepository.Row assignment(String property, String assignmentId) {
         long propertyId = propertyId(property);
         return AssignmentIds.parse(assignmentId).flatMap(id -> assignments.find(propertyId, id))
