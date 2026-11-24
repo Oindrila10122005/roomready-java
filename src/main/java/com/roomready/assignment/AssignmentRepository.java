@@ -12,8 +12,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AssignmentRepository {
 
-    /** One assignment and the number of its room. */
-    public record Row(long id, String room, Instant startedAt) {
+    /** One assignment, the number of its room, its stay and its housekeeper. */
+    public record Row(long id, String room, long stayId, String housekeeperId, Instant startedAt) {
     }
 
     /** The latest assignment of a room's current stay, with who cleaned it. */
@@ -38,7 +38,8 @@ public class AssignmentRepository {
 
     public Optional<Row> find(long propertyId, long id) {
         return jdbc.sql("""
-                        SELECT a.id, r.no AS room, a.started_at FROM assignments a JOIN rooms r ON r.id = a.room_id
+                        SELECT a.id, r.no AS room, a.stay_id, a.housekeeper_id, a.started_at
+                        FROM assignments a JOIN rooms r ON r.id = a.room_id
                         WHERE a.property_id = ? AND a.id = ?""")
                 .params(propertyId, id).query(Row.class).optional();
     }

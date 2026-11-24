@@ -19,7 +19,7 @@ public class RoomController {
     public RoomController(RoomService rooms) {
         this.rooms = rooms;
     }
-    
+
     @GetMapping("/rooms")
     public BoardView board(@PathVariable String property,
                            @RequestParam(required = false) @Min(1) @Max(4) Integer floor,
@@ -31,6 +31,12 @@ public class RoomController {
     @GetMapping("/rooms/{no}")
     public RoomView room(@PathVariable String property, @PathVariable String no) {
         return rooms.room(property, no);
+    }
+
+    @GetMapping("/rooms/{no}/history")
+    public HistoryView history(@PathVariable String property, @PathVariable String no,
+                               @RequestParam(required = false) String stay) {
+        return rooms.history(property, no, stay);
     }
 
     @GetMapping("/housekeepers")
