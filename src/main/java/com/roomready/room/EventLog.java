@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -15,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * The append-only log. It can add an event and read a stay's events - nothing else, so nothing in the app can
  * change or remove one. Called inside the transaction of the change it records, so a rolled-back change leaves no
  * event behind. Every event names who did it; the facts are ids and numbers, never the guest.
+ * Every event also leaves one log line on stdout - its kind, the room, who, and its facts.
  */
 @Repository
 public class EventLog {
@@ -25,6 +28,8 @@ public class EventLog {
 
     private record Row(Instant at, String kind, String data) {
     }
+
+    private static final Logger log = LoggerFactory.getLogger("com.roomready.events");
 
     private final JdbcClient jdbc;
     private final ObjectMapper json;
@@ -42,6 +47,7 @@ public class EventLog {
                         INSERT INTO events (property_id, room_id, stay_id, assignment_id, kind, at, actor_id, data)
                         SELECT ?, id, ?, ?, ?, ?, ?, ? FROM rooms WHERE property_id = ? AND no = ?""")
                 .params(propertyId, stayId, assignmentId, kind, at, actorId, write(facts), propertyId, room).update();
+        log.info("event kind={} room={} actor={} facts={}", kind, room, actorId, facts);
     }
 
     /** A room's events during one stay, in `at` order. */
